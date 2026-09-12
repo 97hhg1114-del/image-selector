@@ -46,22 +46,14 @@ STATE_LOCK = threading.Lock()
 # 127.0.0.1 에만 바인딩하는 것으로는 브라우저를 경유한 공격을 못 막는다.
 # 다른 사이트를 띄워 둔 탭이 이 포트로 요청을 보낼 수 있기 때문(CSRF),
 # DNS 리바인딩으로 자기 도메인을 127.0.0.1 로 돌려 놓을 수도 있다. 그래서
-#   1) 실행할 때마다 새로 만든 토큰을 UI 페이지에 심고 모든 API에서 확인하고
+#   1) 실행할 때마다 새로 만든 토큰을 URL에 실어 브라우저를 열고, 페이지를
+#      포함한 모든 요청에서 확인한다. 페이지 본문에 심지 않는 이유: 같은 PC의
+#      다른 프로세스·다른 계정이 GET / 한 번으로 토큰을 얻어 가면 안 되니까.
 #   2) Host / Origin / Sec-Fetch-Site 헤더로 요청이 이 페이지에서 왔는지 본다.
 TOKEN = secrets.token_urlsafe(24)
 ALLOWED_HOSTS = set()    # main() 에서 127.0.0.1:<port>, localhost:<port> 로 채운다
 ALLOWED_ORIGINS = set()
-
-
-def inject_token(body):
-    """UI 페이지에 이번 실행의 토큰을 심는다.
-
-    토큰을 URL이 아니라 페이지 본문에 넣는 이유: 다른 출처의 스크립트는
-    이 페이지의 내용을 읽을 수 없어서(동일 출처 정책) 토큰이 새지 않는다.
-    """
-    tag = ('<script>window.__IS_TOKEN__ = "%s";</script>' % TOKEN).encode("utf-8")
-    i = body.lower().find(b"</head>")
-    return tag + body if i == -1 else body[:i] + tag + body[i:]
+MAX_BODY = 1 << 20       # JSON 요청 본문 상한(1MB). 경로 목록이 이보다 클 일은 없다
 
 
 def norm(p):
@@ -148,6 +140,7 @@ def pick_folder_dialog():
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "ImageSelector/1.0"
     protocol_version = "HTTP/1.1"
+    timeout = 30             # 요청을 보내다 마는 연결은 30초 뒤 끊는다
 
     def log_message(self, fmt, *args):  # 콘솔 조용히
         pass
@@ -191,6 +184,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         if not length:
             return {}
+        if length > MAX_BODY:
+            self.close_connection = True
+            return None
         raw = self.rfile.read(length)
         try:
             return json.loads(raw.decode("utf-8"))
@@ -203,8 +199,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         route = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
 
-        if not self.origin_ok():
-            self.send_error(403, "forbidden")
+        if not self.origin_ok() or not self.token_ok(query):
+            self.send_error(403, "forbidden - open the URL the program printed")
             return
 
         if route in ("/", "/index.html"):
@@ -214,11 +210,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except OSError:
                 self.send_error(500, "ui.html not found")
                 return
-            self.send_bytes(inject_token(body), "text/html; charset=utf-8", cache=False)
-            return
-
-        if not self.token_ok(query):
-            self.send_error(403, "forbidden")
+            self.send_bytes(body, "text/html; charset=utf-8", cache=False)
             return
 
         if route == "/api/browse":
@@ -241,12 +233,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             ctype, _ = mimetypes.guess_type(full)
             try:
-                with open(full, "rb") as f:
-                    body = f.read()
+                size = os.path.getsize(full)
+                f = open(full, "rb")
             except OSError:
                 self.send_error(404, "unreadable")
                 return
-            self.send_bytes(body, ctype or "application/octet-stream")
+            with f:  # 통째로 읽지 않고 흘려보낸다. 수 GB짜리 파일도 메모리를 안 먹는다
+                self.send_response(200)
+                self.send_header("Content-Type", ctype or "application/octet-stream")
+                self.send_header("Content-Length", str(size))
+                self.send_header("Cache-Control", "max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                shutil.copyfileobj(f, self.wfile)
             return
 
         self.send_error(404, "not found")
@@ -258,6 +257,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(403, "forbidden")
             return
         data = self.read_json()
+        if data is None:
+            self.send_error(413, "body too large")
+            return
 
         if route == "/api/scan":
             raw = (data.get("path") or "").strip().strip('"').strip("'")
@@ -382,7 +384,7 @@ def main():
     for host in ("127.0.0.1:%d" % port, "localhost:%d" % port):
         ALLOWED_HOSTS.add(host)
         ALLOWED_ORIGINS.add("http://" + host)
-    url = "http://127.0.0.1:%d/" % port
+    url = "http://127.0.0.1:%d/?t=%s" % (port, TOKEN)
     httpd = ThreadingServer(("127.0.0.1", port), Handler)
     print("=" * 52)
     print("  Image Selector")

@@ -460,9 +460,9 @@ button.chip:active { transform: scale(.96); }
 <script>
 "use strict";
 
-/* 서버가 페이지를 내려줄 때 심어 준 이번 실행용 토큰.
+/* 프로그램이 브라우저를 열 때 URL에 실어 준 이번 실행용 토큰.
    모든 요청에 붙여 보낸다 — 다른 사이트가 이 포트로 몰래 요청해도 토큰이 없어 거절된다. */
-const IS_TOKEN = window.__IS_TOKEN__ || "";
+const IS_TOKEN = new URLSearchParams(location.search).get("t") || "";
 const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(IS_TOKEN);
 
 /* =========================================================================
