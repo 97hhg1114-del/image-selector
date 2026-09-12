@@ -1,0 +1,1604 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Image Selector</title>
+<style>
+/* ============================================================
+   Design tokens — seed-design.io 의 role-based 토큰 구조 참고
+   (bg / fg / stroke 역할별 네이밍 + carrot primary, dark theme)
+   ============================================================ */
+:root {
+  --bg-canvas:        #131316;
+  --bg-layer-default: #1B1B1F;
+  --bg-layer-float:   #26262B;
+  --bg-layer-raised:  #2E2E34;
+  --bg-neutral-weak:  rgba(255,255,255,.06);
+  --bg-neutral-hover: rgba(255,255,255,.10);
+
+  --fg-neutral:        #ECECEF;
+  --fg-neutral-muted:  #A3A3AD;
+  --fg-neutral-subtle: #6E6E7A;
+  --fg-on-primary:     #FFFFFF;
+
+  --stroke-neutral:       rgba(255,255,255,.10);
+  --stroke-neutral-strong:rgba(255,255,255,.18);
+
+  --palette-carrot:       #FF6F0F;
+  --palette-carrot-hover: #F26100;
+  --palette-carrot-weak:  rgba(255,111,15,.16);
+  --palette-carrot-line:  rgba(255,111,15,.42);
+
+  --radius-s:  6px;
+  --radius-m:  10px;
+  --radius-l:  16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+
+  --shadow-float: 0 8px 28px rgba(0,0,0,.44), 0 2px 6px rgba(0,0,0,.32);
+  --shadow-raise: 0 18px 48px rgba(0,0,0,.55);
+
+  /* 모든 모션은 ease-in-out */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --ease-strong: cubic-bezier(.65, 0, .35, 1);
+  --dur-s: 160ms;
+  --dur-m: 260ms;
+  --dur-l: 420ms;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg-canvas);
+  color: var(--fg-neutral);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+               "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--palette-carrot); outline-offset: 2px; }
+
+/* ============================ 1. 시작 화면 ============================ */
+#setup {
+  position: fixed; inset: 0; z-index: 40;
+  display: grid; place-items: center;
+  background:
+    radial-gradient(1000px 620px at 50% -10%, rgba(255,111,15,.10), transparent 62%),
+    var(--bg-canvas);
+  transition: opacity var(--dur-l) var(--ease), transform var(--dur-l) var(--ease);
+}
+#setup.hide { opacity: 0; transform: scale(.98); pointer-events: none; }
+
+.setup-card { width: min(560px, calc(100vw - 48px)); }
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.brand-mark {
+  width: 40px; height: 40px; border-radius: var(--radius-m);
+  background: linear-gradient(135deg, var(--palette-carrot), #FF9A4D);
+  display: grid; place-items: center; box-shadow: var(--shadow-float);
+}
+.brand-mark svg { width: 22px; height: 22px; }
+.brand h1 { font-size: 21px; line-height: 1.3; font-weight: 700; margin: 0; letter-spacing: -.02em; }
+.brand p { margin: 2px 0 0; font-size: 13px; color: var(--fg-neutral-subtle); }
+
+.field-label { display: block; font-size: 13px; font-weight: 600; color: var(--fg-neutral-muted); margin-bottom: 8px; }
+.path-row { display: flex; gap: 8px; }
+.input {
+  flex: 1; min-width: 0; height: 52px; padding: 0 16px;
+  background: var(--bg-layer-default);
+  border: 1px solid var(--stroke-neutral);
+  border-radius: var(--radius-m);
+  color: var(--fg-neutral); font-size: 15px;
+  transition: border-color var(--dur-m) var(--ease), background var(--dur-m) var(--ease),
+              box-shadow var(--dur-m) var(--ease);
+}
+.input::placeholder { color: var(--fg-neutral-subtle); }
+.input:hover { background: var(--bg-layer-float); }
+.input:focus { outline: none; border-color: var(--palette-carrot); box-shadow: 0 0 0 3px var(--palette-carrot-weak); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 52px; padding: 0 20px; border-radius: var(--radius-m);
+  font-size: 15px; font-weight: 600; white-space: nowrap;
+  transition: background var(--dur-m) var(--ease), transform var(--dur-m) var(--ease),
+              opacity var(--dur-m) var(--ease), box-shadow var(--dur-m) var(--ease);
+}
+.btn:active { transform: scale(.975); }
+.btn-secondary { background: var(--bg-layer-float); border: 1px solid var(--stroke-neutral); }
+.btn-secondary:hover { background: var(--bg-layer-raised); }
+.btn-primary { background: var(--palette-carrot); color: var(--fg-on-primary); }
+.btn-primary:hover { background: var(--palette-carrot-hover); }
+.btn-primary[disabled] { opacity: .4; pointer-events: none; }
+.btn-block { width: 100%; margin-top: 20px; height: 56px; font-size: 16px; }
+
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 18px; padding: 16px 18px;
+  background: var(--bg-layer-default); border: 1px solid var(--stroke-neutral);
+  border-radius: var(--radius-m);
+  transition: background var(--dur-m) var(--ease), border-color var(--dur-m) var(--ease);
+  cursor: pointer;
+}
+.toggle-row:hover { background: var(--bg-layer-float); }
+.toggle-row strong { display: block; font-size: 14.5px; font-weight: 600; }
+.toggle-row span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--fg-neutral-subtle); }
+.switch {
+  position: relative; flex: none; width: 52px; height: 30px; border-radius: var(--radius-full);
+  background: var(--bg-layer-raised); border: 1px solid var(--stroke-neutral);
+  transition: background var(--dur-m) var(--ease), border-color var(--dur-m) var(--ease);
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+  border-radius: var(--radius-full); background: var(--fg-neutral-muted);
+  transition: transform var(--dur-m) var(--ease), background var(--dur-m) var(--ease),
+              width var(--dur-m) var(--ease);
+}
+.switch.on { background: var(--palette-carrot); border-color: transparent; }
+.switch.on::after { transform: translateX(22px); background: #fff; }
+.switch:active::after { width: 27px; }
+.switch.on:active::after { transform: translateX(17px); }
+
+.hint { margin-top: 14px; font-size: 12.5px; color: var(--fg-neutral-subtle); line-height: 1.6; }
+.err {
+  margin-top: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.5;
+  color: #FFB4A0; background: rgba(255,86,48,.10);
+  border: 1px solid rgba(255,86,48,.28); border-radius: var(--radius-s);
+  opacity: 0; transform: translateY(-4px); pointer-events: none;
+  transition: opacity var(--dur-m) var(--ease), transform var(--dur-m) var(--ease);
+}
+.err.show { opacity: 1; transform: none; }
+
+/* ============================ 2. 로딩 ============================ */
+#loading {
+  position: fixed; inset: 0; z-index: 45; display: grid; place-items: center;
+  background: rgba(19,19,22,.92); backdrop-filter: blur(6px);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-m) var(--ease);
+}
+#loading.show { opacity: 1; pointer-events: auto; }
+.loading-box { width: min(380px, calc(100vw - 48px)); text-align: center; }
+.loading-box h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.loading-box p { font-size: 13px; color: var(--fg-neutral-subtle); margin: 0 0 18px; }
+.bar { height: 6px; border-radius: var(--radius-full); background: var(--bg-layer-raised); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--palette-carrot), #FFA255);
+  transition: width var(--dur-m) var(--ease); }
+
+/* ============================ 3. 그래프 화면 ============================ */
+#canvas { position: fixed; inset: 0; z-index: 1; display: block; cursor: grab; }
+#canvas.grabbing { cursor: grabbing; }
+#canvas.pointing { cursor: pointer; }
+
+#hud { position: fixed; inset: 0; z-index: 10; pointer-events: none;
+  opacity: 0; transition: opacity var(--dur-l) var(--ease); }
+#hud.show { opacity: 1; }
+#hud > * { pointer-events: auto; }
+
+.topbar {
+  position: absolute; top: 18px; left: 18px; right: 18px;
+  display: flex; align-items: center; gap: 10px;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+  background: rgba(38,38,43,.82); backdrop-filter: blur(12px);
+  border: 1px solid var(--stroke-neutral); border-radius: var(--radius-full);
+  font-size: 13px; color: var(--fg-neutral-muted);
+  transition: background var(--dur-m) var(--ease), color var(--dur-m) var(--ease),
+              transform var(--dur-m) var(--ease), border-color var(--dur-m) var(--ease);
+}
+button.chip:hover { background: var(--bg-layer-raised); color: var(--fg-neutral); }
+button.chip:active { transform: scale(.96); }
+.chip b { color: var(--fg-neutral); font-weight: 600; }
+.chip .path-text { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spacer { flex: 1; }
+
+/* 즐겨찾기 리스트 */
+#favbar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 148px;
+  padding: 14px 18px 16px;
+  background: linear-gradient(to top, rgba(19,19,22,.96) 55%, rgba(19,19,22,0));
+  transform: translateY(100%);
+  transition: transform var(--dur-l) var(--ease);
+  display: flex; flex-direction: column; gap: 8px;
+}
+#favbar.show { transform: translateY(0); }
+.fav-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-neutral-muted); }
+.fav-head b { color: var(--fg-neutral); font-weight: 600; }
+.fav-scroll-wrap { position: relative; flex: 1; min-height: 0; }
+#favlist {
+  display: flex; gap: 10px; height: 100%; align-items: center;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  padding: 2px 46px 2px 0;
+}
+#favlist::-webkit-scrollbar { height: 0; }
+.fav-item {
+  position: relative; flex: none; height: 84px; border-radius: var(--radius-s);
+  overflow: hidden; border: 1px solid var(--stroke-neutral);
+  background: var(--bg-layer-default); cursor: pointer;
+  transform-origin: center bottom;
+  transition: transform var(--dur-m) var(--ease), border-color var(--dur-m) var(--ease),
+              box-shadow var(--dur-m) var(--ease), opacity var(--dur-m) var(--ease);
+}
+.fav-item canvas { display: block; height: 84px; width: auto; }
+.fav-item:hover { transform: translateY(-4px) scale(1.04); border-color: var(--palette-carrot); box-shadow: var(--shadow-float); }
+.fav-item.enter { opacity: 0; transform: translateY(14px) scale(.9); }
+.fav-item .rm {
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: var(--radius-full);
+  background: rgba(19,19,22,.72); display: grid; place-items: center;
+  opacity: 0; transform: scale(.8);
+  transition: opacity var(--dur-m) var(--ease), transform var(--dur-m) var(--ease), background var(--dur-m) var(--ease);
+}
+.fav-item:hover .rm { opacity: 1; transform: none; }
+.fav-item .rm:hover { background: var(--palette-carrot); }
+.fav-item .rm svg { width: 11px; height: 11px; }
+.fav-empty { font-size: 13px; color: var(--fg-neutral-subtle); align-self: center; }
+
+.slide-btn {
+  position: absolute; top: 50%; width: 34px; height: 34px; margin-top: -17px;
+  border-radius: var(--radius-full); background: rgba(46,46,52,.92);
+  border: 1px solid var(--stroke-neutral); display: grid; place-items: center;
+  box-shadow: var(--shadow-float);
+  opacity: 0; transform: scale(.86);
+  transition: opacity var(--dur-m) var(--ease), transform var(--dur-m) var(--ease), background var(--dur-m) var(--ease);
+}
+.slide-btn.show { opacity: 1; transform: none; }
+.slide-btn:hover { background: var(--bg-layer-raised); }
+.slide-btn:active { transform: scale(.9); }
+.slide-btn svg { width: 14px; height: 14px; }
+#slideL { left: -4px; }
+#slideR { right: 42px; }
+
+/* 내보내기 */
+#exportBtn {
+  position: absolute; right: 18px; bottom: 22px;
+  height: 56px; padding: 0 24px; border-radius: var(--radius-full);
+  background: var(--palette-carrot); color: var(--fg-on-primary);
+  font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; gap: 10px;
+  box-shadow: 0 10px 30px rgba(255,111,15,.34), var(--shadow-float);
+  transition: transform var(--dur-l) var(--ease), background var(--dur-m) var(--ease),
+              opacity var(--dur-m) var(--ease), bottom var(--dur-l) var(--ease),
+              box-shadow var(--dur-m) var(--ease);
+}
+#exportBtn:hover { background: var(--palette-carrot-hover); }
+#exportBtn:active { transform: scale(.96); }
+#exportBtn[disabled] { opacity: .38; pointer-events: none; box-shadow: none; }
+#exportBtn.lifted { bottom: 166px; }
+#exportBtn .count {
+  min-width: 24px; height: 24px; padding: 0 7px; border-radius: var(--radius-full);
+  background: rgba(255,255,255,.24); display: inline-grid; place-items: center;
+  font-size: 12.5px; font-weight: 700;
+}
+#exportBtn svg { width: 18px; height: 18px; }
+
+/* ============================ 4. 전체화면 뷰어 ============================ */
+#viewer {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  overflow: hidden;
+  background: rgba(12,12,14,.90); backdrop-filter: blur(14px);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-m) var(--ease), backdrop-filter var(--dur-m) var(--ease);
+}
+#viewer.show { opacity: 1; pointer-events: auto; }
+#viewer.zoomed { cursor: grab; }
+#viewer.zoomed.panning { cursor: grabbing; }
+#viewerImg {
+  max-width: none; will-change: transform;
+  -webkit-user-drag: none; user-select: none;
+  /* drop-shadow 필터는 확대 시 전체 픽셀을 다시 블러해 매우 느리다 → box-shadow */
+  box-shadow: var(--shadow-raise);
+  transform: scale(.92); opacity: 0;
+  transition: transform var(--dur-l) var(--ease), opacity var(--dur-m) var(--ease);
+}
+#viewer.show #viewerImg { opacity: 1; }   /* transform 은 JS 가 관리(휠 확대) */
+#viewerZoom {
+  opacity: 0; transform: translateY(-6px) scale(.96); pointer-events: none;
+  transition: opacity var(--dur-m) var(--ease), transform var(--dur-m) var(--ease);
+}
+#viewerZoom.show { opacity: 1; transform: none; }
+.viewer-top {
+  position: absolute; top: 22px; left: 26px; right: 26px;
+  display: flex; align-items: center; gap: 10px;
+  transform: translateY(-10px); opacity: 0;
+  transition: transform var(--dur-l) var(--ease), opacity var(--dur-m) var(--ease);
+}
+.viewer-bottom {
+  position: absolute; bottom: 26px; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  transform: translateY(14px); opacity: 0;
+  transition: transform var(--dur-l) var(--ease), opacity var(--dur-m) var(--ease);
+}
+#viewer.show .viewer-top, #viewer.show .viewer-bottom { transform: none; opacity: 1; }
+.vbtn {
+  display: inline-flex; align-items: center; gap: 9px; height: 52px; padding: 0 24px;
+  border-radius: var(--radius-full); font-size: 15px; font-weight: 600;
+  background: rgba(46,46,52,.86); border: 1px solid var(--stroke-neutral);
+  backdrop-filter: blur(10px);
+  transition: background var(--dur-m) var(--ease), transform var(--dur-m) var(--ease),
+              color var(--dur-m) var(--ease), border-color var(--dur-m) var(--ease),
+              box-shadow var(--dur-m) var(--ease);
+}
+.vbtn:hover { background: var(--bg-layer-raised); }
+.vbtn:active { transform: scale(.96); }
+.vbtn svg { width: 19px; height: 19px; transition: transform var(--dur-m) var(--ease); }
+.vbtn.fav-on { background: var(--palette-carrot); border-color: transparent; color: var(--fg-on-primary);
+  box-shadow: 0 8px 24px rgba(255,111,15,.34); }
+.vbtn.fav-on:hover { background: var(--palette-carrot-hover); }
+.vbtn.fav-on svg { transform: scale(1.12) rotate(72deg); }
+.nav-btn {
+  position: absolute; top: 50%; width: 52px; height: 52px; margin-top: -26px;
+  border-radius: var(--radius-full); background: rgba(46,46,52,.8);
+  border: 1px solid var(--stroke-neutral); display: grid; place-items: center;
+  transition: background var(--dur-m) var(--ease), transform var(--dur-m) var(--ease);
+}
+.nav-btn:hover { background: var(--bg-layer-raised); transform: scale(1.06); }
+.nav-btn:active { transform: scale(.94); }
+.nav-btn svg { width: 18px; height: 18px; }
+#navPrev { left: 22px; }
+#navNext { right: 22px; }
+.viewer-name { font-size: 13.5px; color: var(--fg-neutral-muted); max-width: 60vw;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============================ 5. 토스트 ============================ */
+#toast {
+  position: fixed; left: 50%; bottom: 40px; z-index: 80;
+  transform: translate(-50%, 24px) scale(.96); opacity: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px; border-radius: var(--radius-full);
+  background: var(--bg-layer-raised); border: 1px solid var(--stroke-neutral);
+  box-shadow: var(--shadow-raise); font-size: 14px; max-width: 82vw;
+  transition: transform var(--dur-l) var(--ease), opacity var(--dur-m) var(--ease);
+}
+#toast.show { transform: translate(-50%, 0) scale(1); opacity: 1; }
+#toast .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--palette-carrot); flex: none; }
+</style>
+
+<!-- ============================ 시작 화면 ============================ -->
+<div id="setup">
+  <div class="setup-card">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="7" r="3"/><circle cx="18" cy="7" r="3"/><circle cx="12" cy="18" r="3"/>
+          <path d="M8.6 8.6 10.6 15.6M15.4 8.6 13.4 15.6M9 7h6"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Image Selector</h1>
+        <p>톤으로 연결된 이미지 보드에서 고르고, 내보내기</p>
+      </div>
+    </div>
+
+    <label class="field-label" for="pathInput">폴더 경로</label>
+    <div class="path-row">
+      <input id="pathInput" class="input" spellcheck="false" placeholder="예) C:\Users\User\Pictures" />
+      <button id="browseBtn" class="btn btn-secondary">찾아보기</button>
+    </div>
+
+    <div class="toggle-row" id="recursiveRow">
+      <div>
+        <strong>하위 폴더까지 포함</strong>
+        <span>폴더 안의 모든 하위 폴더를 재귀적으로 검색합니다</span>
+      </div>
+      <div class="switch" id="recursiveSwitch" role="switch" aria-checked="false" tabindex="0"></div>
+    </div>
+
+    <button id="startBtn" class="btn btn-primary btn-block">이미지 불러오기</button>
+    <div class="hint">불러온 이미지는 색조가 비슷한 것끼리 선으로 이어집니다. 드래그로 옮기고, 클릭하면 전체화면으로 열립니다.</div>
+    <div class="err" id="setupErr"></div>
+  </div>
+</div>
+
+<!-- ============================ 로딩 ============================ -->
+<div id="loading">
+  <div class="loading-box">
+    <h2 id="loadTitle">이미지 분석 중</h2>
+    <p id="loadSub">색조를 계산해 연결 관계를 만들고 있어요</p>
+    <div class="bar"><i id="loadBar"></i></div>
+  </div>
+</div>
+
+<!-- ============================ 그래프 ============================ -->
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <div class="topbar">
+    <button class="chip" id="backBtn" title="다른 폴더 선택">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      폴더 변경
+    </button>
+    <div class="chip"><span class="path-text" id="rootText"></span></div>
+    <div class="chip"><b id="countText">0</b>장</div>
+    <div class="spacer"></div>
+    <button class="chip" id="fitBtn" title="전체 보기 (0)">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+      전체 보기
+    </button>
+  </div>
+
+  <div id="favbar">
+    <div class="fav-head">
+      즐겨찾기 <b id="favCount">0</b>장 · 좌우로 슬라이드해서 확인하세요
+    </div>
+    <div class="fav-scroll-wrap">
+      <div id="favlist"><div class="fav-empty">이미지를 클릭해 전체화면에서 즐겨찾기에 추가해 보세요</div></div>
+      <button class="slide-btn" id="slideL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="slide-btn" id="slideR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+    </div>
+  </div>
+
+  <button id="exportBtn" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M12 3v13M7 8l5-5 5 5"/></svg>
+    Selected 폴더로 내보내기
+    <span class="count" id="exportCount">0</span>
+  </button>
+</div>
+
+<!-- ============================ 뷰어 ============================ -->
+<div id="viewer">
+  <div class="viewer-top">
+    <div class="chip"><span class="viewer-name" id="viewerName"></span></div>
+    <div class="spacer"></div>
+    <div class="chip" id="viewerZoom">100%</div>
+    <div class="chip" id="viewerIndex"></div>
+  </div>
+  <img id="viewerImg" alt="" draggable="false" />
+  <button class="nav-btn" id="navPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+  <button class="nav-btn" id="navNext"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+  <div class="viewer-bottom">
+    <button class="vbtn" id="favBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.45 6.2 20.5l1.1-6.45L2.6 9.45l6.5-.95z"/></svg>
+      <span id="favBtnText">즐겨찾기에 추가</span>
+    </button>
+    <button class="vbtn" id="closeBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      닫고 보드로 돌아가기
+    </button>
+  </div>
+</div>
+
+<div id="toast"><span class="dot"></span><span id="toastText"></span></div>
+
+<script>
+"use strict";
+
+/* 서버가 페이지를 내려줄 때 심어 준 이번 실행용 토큰.
+   모든 요청에 붙여 보낸다 — 다른 사이트가 이 포트로 몰래 요청해도 토큰이 없어 거절된다. */
+const IS_TOKEN = window.__IS_TOKEN__ || "";
+const api = (p) => p + (p.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(IS_TOKEN);
+
+/* =========================================================================
+   0. 공통 유틸 — 모든 모션은 ease-in-out
+   ========================================================================= */
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const easeInOut = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const now = () => performance.now();
+
+/** 값 트윈: ease-in-out 으로 from→to 진행 */
+function makeTween(from, to, dur) {
+  return { from, to, dur, start: now(), done: false };
+}
+function readTween(tw, fallback) {
+  if (!tw) return fallback;
+  const p = clamp((now() - tw.start) / tw.dur, 0, 1);
+  if (p >= 1) tw.done = true;
+  return tw.from + (tw.to - tw.from) * easeInOut(p);
+}
+/** DOM 가로 스크롤을 ease-in-out 으로 이동 */
+function animateScroll(el, to, dur = 460) {
+  const from = el.scrollLeft;
+  const target = clamp(to, 0, el.scrollWidth - el.clientWidth);
+  const t0 = now();
+  cancelAnimationFrame(el._scrollRaf || 0);
+  const step = () => {
+    const p = clamp((now() - t0) / dur, 0, 1);
+    el.scrollLeft = from + (target - from) * easeInOut(p);
+    if (p < 1) el._scrollRaf = requestAnimationFrame(step);
+  };
+  el._scrollRaf = requestAnimationFrame(step);
+}
+let toastTimer = 0;
+function toast(msg, ms = 2600) {
+  $("toastText").textContent = msg;
+  $("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $("toast").classList.remove("show"), ms);
+}
+
+/* =========================================================================
+   1. 시작 화면
+   ========================================================================= */
+const setupEl = $("setup");
+const pathInput = $("pathInput");
+const swEl = $("recursiveSwitch");
+let recursive = false;
+
+pathInput.value = localStorage.getItem("is:path") || "";
+recursive = localStorage.getItem("is:recursive") === "1";
+swEl.classList.toggle("on", recursive);
+swEl.setAttribute("aria-checked", String(recursive));
+
+function toggleRecursive() {
+  recursive = !recursive;
+  swEl.classList.toggle("on", recursive);
+  swEl.setAttribute("aria-checked", String(recursive));
+  localStorage.setItem("is:recursive", recursive ? "1" : "0");
+}
+$("recursiveRow").addEventListener("click", toggleRecursive);
+swEl.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); toggleRecursive(); }
+});
+
+function showErr(msg) {
+  const el = $("setupErr");
+  el.textContent = msg;
+  el.classList.toggle("show", !!msg);
+}
+
+$("browseBtn").addEventListener("click", async () => {
+  try {
+    const r = await fetch(api("/api/browse")).then(r => r.json());
+    if (r.ok) { pathInput.value = r.path; showErr(""); }
+  } catch (e) { showErr("폴더 선택창을 열 수 없습니다. 경로를 직접 입력해 주세요."); }
+});
+pathInput.addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
+$("startBtn").addEventListener("click", start);
+
+async function start() {
+  const path = pathInput.value.trim();
+  if (!path) { showErr("폴더 경로를 입력해 주세요."); pathInput.focus(); return; }
+  showErr("");
+  $("startBtn").disabled = true;
+  let res;
+  try {
+    res = await fetch(api("/api/scan"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, recursive })
+    }).then(r => r.json());
+  } catch (e) {
+    $("startBtn").disabled = false;
+    showErr("서버와 통신할 수 없습니다.");
+    return;
+  }
+  $("startBtn").disabled = false;
+  if (!res.ok) { showErr(res.error || "폴더를 읽지 못했습니다."); return; }
+  if (!res.count) { showErr("이 폴더에서 이미지 파일을 찾지 못했습니다."); return; }
+
+  localStorage.setItem("is:path", path);
+  ROOT = res.root;
+  $("rootText").textContent = res.root;
+  $("rootText").title = res.root;
+  setupEl.classList.add("hide");
+  $("loading").classList.add("show");
+  await loadAll(res.items);
+  if (res.truncated) toast(`이미지가 많아 처음 ${res.max}장만 불러왔습니다.`, 4200);
+}
+
+/* =========================================================================
+   2. 이미지 로딩 + 색조(톤) 분석
+   ========================================================================= */
+let ROOT = "";
+let nodes = [];
+let edges = [];
+const THUMB = 180;             // 썸네일 최대 픽셀
+const scratch = document.createElement("canvas");
+scratch.width = scratch.height = 32;
+const sctx = scratch.getContext("2d", { willReadFrequently: true });
+
+function rgb2hsl(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === r) h = ((g - b) / d) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60; if (h < 0) h += 360;
+  }
+  const l = (mx + mn) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  return { h, s, l };
+}
+
+/** 썸네일에서 대표 색조 추출: 채도 가중 원형 평균 hue + 평균 s,l */
+function analyzeTone(bmp) {
+  sctx.clearRect(0, 0, 32, 32);
+  sctx.drawImage(bmp, 0, 0, 32, 32);
+  const d = sctx.getImageData(0, 0, 32, 32).data;
+  let cx = 0, cy = 0, ss = 0, sl = 0, wsum = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 24) continue;
+    const { h, s, l } = rgb2hsl(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255);
+    const w = s * (1 - Math.abs(2 * l - 1) * .6) + .02;
+    const a = h * Math.PI / 180;
+    cx += Math.cos(a) * w; cy += Math.sin(a) * w; wsum += w;
+    ss += s; sl += l; n++;
+  }
+  if (!n) return { h: 0, s: 0, l: .5, chroma: 0 };
+  let h = Math.atan2(cy, cx) * 180 / Math.PI; if (h < 0) h += 360;
+  const chroma = wsum ? Math.hypot(cx, cy) / wsum : 0;  // 색조 응집도
+  return { h, s: ss / n, l: sl / n, chroma };
+}
+
+/** 두 이미지의 톤 거리 (0=동일) */
+function toneDist(a, b) {
+  let dh = Math.abs(a.h - b.h); if (dh > 180) dh = 360 - dh;
+  const colorful = Math.min(a.s, b.s) * Math.min(a.chroma, b.chroma);
+  return (dh / 180) * (0.35 + 1.45 * colorful)
+       + Math.abs(a.s - b.s) * 0.55
+       + Math.abs(a.l - b.l) * 0.95;
+}
+
+async function fetchThumb(url) {
+  const blob = await fetch(url).then(r => { if (!r.ok) throw new Error("fail"); return r.blob(); });
+  if ("createImageBitmap" in window) {
+    try { return await createImageBitmap(blob, { resizeWidth: THUMB, resizeQuality: "high" }); }
+    catch (e) { /* 옵션 미지원 → fallback */ }
+  }
+  const objUrl = URL.createObjectURL(blob);
+  const img = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im); im.onerror = rej; im.src = objUrl;
+  });
+  const k = THUMB / Math.max(img.width, img.height, 1);
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(img.width * Math.min(1, k)));
+  c.height = Math.max(1, Math.round(img.height * Math.min(1, k)));
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(objUrl);
+  return c;
+}
+
+/** 멀리서 볼 때 쓰는 소형 비트맵 — 큰 썸네일을 매 프레임 축소하면 렌더가 느리다 */
+const SMALL = 56;
+async function makeSmall(bmp) {
+  const k = SMALL / Math.max(bmp.width, bmp.height, 1);
+  if (k >= 1 || !("createImageBitmap" in window)) return bmp;
+  try {
+    return await createImageBitmap(bmp, {
+      resizeWidth: Math.max(1, Math.round(bmp.width * k)),
+      resizeHeight: Math.max(1, Math.round(bmp.height * k)),
+      resizeQuality: "high"
+    });
+  } catch (e) { return bmp; }
+}
+
+async function loadAll(items) {
+  nodes = []; edges = [];
+  let done = 0;
+  const total = items.length;
+  $("loadTitle").textContent = "이미지 불러오는 중";
+  const bump = () => {
+    done++;
+    $("loadBar").style.width = (done / total * 100).toFixed(1) + "%";
+    $("loadSub").textContent = `${done} / ${total}`;
+  };
+
+  const CONC = 6;
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const it = items[cursor++];
+      try {
+        const bmp = await fetchThumb(api("/file?p=" + encodeURIComponent(it.path)));
+        const tone = analyzeTone(bmp);
+        nodes.push(makeNode(it, bmp, await makeSmall(bmp), tone));
+      } catch (e) { /* 손상/미지원 파일은 건너뜀 */ }
+      bump();
+    }
+  };
+  await Promise.all(Array.from({ length: CONC }, worker));
+
+  if (!nodes.length) {
+    $("loading").classList.remove("show");
+    setupEl.classList.remove("hide");
+    showErr("이미지를 하나도 읽지 못했습니다.");
+    return;
+  }
+  nodes.sort((a, b) => a.path.localeCompare(b.path));
+  nodeById.clear();
+  nodes.forEach((n, i) => { n.index = i; nodeById.set(n.id, n); });
+
+  $("loadTitle").textContent = "색조 연결 만드는 중";
+  await new Promise(r => setTimeout(r, 16));
+  buildEdges();
+  layoutByTone();
+
+  $("loadTitle").textContent = "보드 정렬 중";
+  $("loadSub").textContent = "이미지가 겹치지 않게 자리를 잡고 있어요";
+  $("loadBar").style.width = "0%";
+  await settle();
+
+  $("countText").textContent = nodes.length;
+  $("loading").classList.remove("show");
+  $("hud").classList.add("show");
+  running = true;
+  introStart = now(); lastT = now();
+  fitView(900);
+  requestAnimationFrame(loop);
+}
+
+let uid = 0;
+function makeNode(it, bmp, small, tone) {
+  const maxDim = Math.max(bmp.width, bmp.height, 1);
+  const k = NODE_SIZE / maxDim;
+  return {
+    id: uid++, index: 0,
+    path: it.path, name: it.name,
+    bmp, small, tone,
+    css: `hsl(${tone.h.toFixed(0)} ${Math.round(clamp(tone.s, .12, .85) * 100)}% ${Math.round(clamp(tone.l, .3, .7) * 100)}%)`,
+    w: bmp.width * k, h: bmp.height * k,
+    x: 0, y: 0, vx: 0, vy: 0,
+    phase: Math.random() * Math.PI * 2,
+    driftSpeed: .00022 + Math.random() * .00028,
+    hoverP: 0, hoverDir: -1,   // ease-in-out 확대 진행도
+    favP: 0, favDir: -1,       // 즐겨찾기 배지 등장 진행도
+    introP: 0, introDelay: 0,
+    fav: false, neighbors: []
+  };
+}
+
+const NODE_SIZE = 116;
+const HOVER_SCALE = 0.70;   // 마우스를 올렸을 때 커지는 비율 (0.70 = 70% 확대)
+const K_NEAREST = 3;
+const MAX_DEG = 6;
+
+function buildEdges() {
+  const n = nodes.length;
+  edges = [];
+  const seen = new Set();
+  const bestD = new Float64Array(K_NEAREST);
+  const bestJ = new Int32Array(K_NEAREST);
+  const cd = new Float64Array(n * K_NEAREST);   // 후보 거리
+  const cj = new Int32Array(n * K_NEAREST);     // 후보 상대
+  const cn = new Int32Array(n);                 // 후보 수
+  for (let i = 0; i < n; i++) {
+    // 톤이 가장 가까운 K개만 top-k 삽입으로 추림 (정렬/배열 할당 없이)
+    let filled = 0;
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const d = toneDist(nodes[i].tone, nodes[j].tone);
+      if (filled < K_NEAREST) {
+        let p = filled++;
+        while (p > 0 && bestD[p - 1] > d) { bestD[p] = bestD[p - 1]; bestJ[p] = bestJ[p - 1]; p--; }
+        bestD[p] = d; bestJ[p] = j;
+      } else if (d < bestD[K_NEAREST - 1]) {
+        let p = K_NEAREST - 1;
+        while (p > 0 && bestD[p - 1] > d) { bestD[p] = bestD[p - 1]; bestJ[p] = bestJ[p - 1]; p--; }
+        bestD[p] = d; bestJ[p] = j;
+      }
+    }
+    for (let c = 0; c < filled; c++) { cd[i * K_NEAREST + c] = bestD[c]; cj[i * K_NEAREST + c] = bestJ[c]; }
+    cn[i] = filled;
+  }
+
+  // 2단계로 연결 — 특정 이미지에 연결이 몰리면(허브) 그 주변이 뭉개지므로 차수를 제한
+  const deg = new Int32Array(n);
+  const add = (i, j, d) => {
+    const key = i < j ? i + "_" + j : j + "_" + i;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const sim = clamp(1 - d / 0.8, 0, 1);
+    edges.push({ a: nodes[i], b: nodes[j], sim, rest: 168 + (1 - sim) * 130 });
+    nodes[i].neighbors.push(nodes[j].id);
+    nodes[j].neighbors.push(nodes[i].id);
+    deg[i]++; deg[j]++;
+  };
+  for (let i = 0; i < n; i++) {                    // ① 모든 이미지에 최소 1개
+    if (cn[i] && deg[i] === 0) add(i, cj[i * K_NEAREST], cd[i * K_NEAREST]);
+  }
+  for (let i = 0; i < n; i++) {                    // ② 나머지는 차수 제한 안에서
+    for (let c = 0; c < cn[i]; c++) {
+      const d = cd[i * K_NEAREST + c], j = cj[i * K_NEAREST + c];
+      if (d > 0.62 && c > 0) break;                // 너무 먼 톤은 연결하지 않음
+      if (deg[i] >= MAX_DEG || deg[j] >= MAX_DEG) continue;
+      add(i, j, d);
+    }
+  }
+  groupEdges();
+}
+
+/* 선을 색조/굵기 버킷으로 묶어 한 번에 stroke — 수천 개를 개별로 그리면 렌더가 느리다 */
+const HUE_BUCKETS = 12, SIM_LEVELS = 3;
+let edgeGroups = [], groupStyle = [];
+function groupEdges() {
+  edgeGroups = Array.from({ length: HUE_BUCKETS * SIM_LEVELS }, () => []);
+  groupStyle = [];
+  for (let h = 0; h < HUE_BUCKETS; h++) {
+    for (let s = 0; s < SIM_LEVELS; s++) {
+      const sim = (s + .5) / SIM_LEVELS;
+      groupStyle[h * SIM_LEVELS + s] = {
+        color: `hsl(${h * (360 / HUE_BUCKETS) + 15} 52% 62%)`,
+        alpha: 0.16 + sim * 0.30,
+        width: 0.9 + sim * 1.5
+      };
+    }
+  }
+  for (const e of edges) {
+    const h = Math.min(HUE_BUCKETS - 1, Math.floor((((e.a.tone.h % 360) + 360) % 360) / (360 / HUE_BUCKETS)));
+    const s = Math.min(SIM_LEVELS - 1, Math.floor(clamp(e.sim, 0, .999) * SIM_LEVELS));
+    e.grp = h * SIM_LEVELS + s;
+    edgeGroups[e.grp].push(e);
+  }
+}
+
+/** 보드가 자연스럽게 채워질 크기 / 화면 비율 */
+let boardR = 600;
+// 화면 비율에 맞춘 타원(가로/세로 각각 sqrt 배)
+const boardAspect = () => Math.sqrt(clamp(VW / Math.max(VH - 190, 320), .75, 2.4));
+function updateBoardR() {
+  const area = Math.pow(NODE_SIZE * 1.55, 2) * Math.max(nodes.length, 1);
+  boardR = Math.sqrt(area / Math.PI) + 130;
+}
+
+/**
+ * 초기 배치: 색조 "순위"를 각도로 → 특정 색에 몰린 폴더에서도 고르게 퍼짐.
+ * 반지름은 r=R*sqrt(u) 로 원판을 균일하게 채움.
+ */
+function layoutByTone() {
+  updateBoardR();
+  const order = nodes.slice().sort((a, b) => a.tone.h - b.tone.h);
+  const N = order.length, ar = boardAspect();
+  order.forEach((n, i) => {
+    const a = (i / N) * Math.PI * 2;
+    const r = boardR * Math.sqrt(Math.random()) * 0.96;
+    n.x = Math.cos(a) * r * ar;
+    n.y = Math.sin(a) * r / ar;
+  });
+  nodes.forEach((n, i) => { n.introDelay = (i % 26) * 20; });
+}
+
+/** 화면에 보여주기 전에 겹침이 풀리도록 미리 정렬 */
+async function settle(steps = 300) {
+  for (let i = 0; i < steps; i++) {
+    simulate(1 / 60, true);
+    if (i % 4 === 0) separate(1, 0);       // 겹침을 확실히 풀어두고 시작
+    if (i % 40 === 39) {
+      $("loadBar").style.width = (i / steps * 85).toFixed(0) + "%";
+      await new Promise(r => setTimeout(r, 0));   // UI 양보
+    }
+  }
+  for (let i = 0; i < 80; i++) {                  // 마무리: 남은 겹침만 정리
+    separate(1, 0);
+    if (i % 20 === 19) {
+      $("loadBar").style.width = (85 + i / 80 * 15).toFixed(0) + "%";
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+}
+
+/* =========================================================================
+   3. 캔버스 · 카메라 · 물리
+   ========================================================================= */
+const canvas = $("canvas");
+const ctx = canvas.getContext("2d");
+let DPR = 1, VW = 0, VH = 0;
+let running = false;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  VW = window.innerWidth; VH = window.innerHeight;
+  canvas.width = Math.round(VW * DPR);
+  canvas.height = Math.round(VH * DPR);
+  canvas.style.width = VW + "px";
+  canvas.style.height = VH + "px";
+}
+resize();
+window.addEventListener("resize", resize);
+
+const cam = { x: 0, y: 0, z: 1, tw: null };
+function camTweenTo(x, y, z, dur = 520) {
+  cam.tw = { fx: cam.x, fy: cam.y, fz: cam.z, tx: x, ty: y, tz: z, start: now(), dur };
+}
+function updateCam() {
+  if (!cam.tw) return;
+  const p = clamp((now() - cam.tw.start) / cam.tw.dur, 0, 1);
+  const e = easeInOut(p);
+  cam.x = cam.tw.fx + (cam.tw.tx - cam.tw.fx) * e;
+  cam.y = cam.tw.fy + (cam.tw.ty - cam.tw.fy) * e;
+  cam.z = cam.tw.fz + (cam.tw.tz - cam.tw.fz) * e;
+  if (p >= 1) cam.tw = null;
+}
+const toWorld = (sx, sy) => ({ x: (sx - cam.x) / cam.z, y: (sy - cam.y) / cam.z });
+
+function fitView(dur = 620) {
+  if (!nodes.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x - n.w / 2); maxX = Math.max(maxX, n.x + n.w / 2);
+    minY = Math.min(minY, n.y - n.h / 2); maxY = Math.max(maxY, n.y + n.h / 2);
+  }
+  const pad = 90, bh = favVisible ? 176 : 40;
+  const z = clamp(Math.min((VW - pad * 2) / (maxX - minX + 1), (VH - 108 - bh) / (maxY - minY + 1)), .08, 1.6);
+  const cxw = (minX + maxX) / 2, cyw = (minY + maxY) / 2;
+  camTweenTo(VW / 2 - cxw * z, (VH + 72 - bh) / 2 - cyw * z, z, dur);
+}
+
+/* --- 물리: 반발 + 톤 스프링 + 보드 경계 + 부유 드리프트 + 충돌 분리 --- */
+const CELL = 170;
+
+/* 드래그 전파: 잡은 이미지 → 연결된 이미지 → 그 이미지에 연결된 것… 순으로
+   그래프를 따라 끌려오는 정도를 미리 계산해 둔다 (옵시디언과 같은 느낌) */
+const nodeById = new Map();
+let dragInfl = null;          // id → 끌림 세기(0~1)
+let inflP = 0, inflDir = -1;  // ease-in-out 진행도
+let dragVel = { x: 0, y: 0 }, dragT = 0;
+
+function buildDragInfluence(start) {
+  const infl = new Map([[start.id, 1]]);
+  let frontier = [start];
+  for (let depth = 1; depth <= 9 && frontier.length; depth++) {
+    const w = Math.pow(0.72, depth);
+    const next = [];
+    for (const n of frontier) {
+      for (const id of n.neighbors) {
+        if (infl.has(id)) continue;
+        infl.set(id, w);
+        const m = nodeById.get(id);
+        if (m) next.push(m);
+      }
+    }
+    frontier = next;
+  }
+  dragInfl = infl;
+  inflDir = 1;
+  dragVel = { x: 0, y: 0 };
+  dragT = now();
+}
+
+/** 놓는 순간 끌던 속도를 넘겨줘 부드럽게 감속(ease-out)하며 멈추게 한다 */
+function releaseDragInfluence(node) {
+  if (dragInfl) {
+    const k = easeInOut(inflP);
+    const vx = clamp(dragVel.x, -900, 900), vy = clamp(dragVel.y, -900, 900);
+    for (const [id, w] of dragInfl) {
+      const m = nodeById.get(id);
+      if (!m) continue;
+      m.vx += vx * w * k * .55; m.vy += vy * w * k * .55;
+    }
+  }
+  inflDir = -1;
+}
+
+/**
+ * 이웃 쌍 처리: ① 근거리 전용 반발(멀리는 0이라 바깥으로 몰리지 않음)
+ *              ② 겹친 이미지는 위치를 직접 밀어 분리 (힘보다 훨씬 빨리 수렴)
+ */
+function separate(strength, dt) {
+  const C = NODE_SIZE * 1.35;
+  const grid = new Map();
+  for (const n of nodes) {
+    const k = ((n.x / C) | 0) + "," + ((n.y / C) | 0);
+    let arr = grid.get(k); if (!arr) grid.set(k, arr = []);
+    arr.push(n);
+  }
+  for (const n of nodes) {
+    const gx = (n.x / C) | 0, gy = (n.y / C) | 0;
+    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+      const arr = grid.get((gx + ox) + "," + (gy + oy));
+      if (!arr) continue;
+      for (const m of arr) {
+        if (m.id <= n.id) continue;                       // 각 쌍을 한 번만
+        const halfW = (n.w + m.w) / 2 + 9;   // AABB가 닿지 않는 최소 간격 + 여백
+        const halfH = (n.h + m.h) / 2 + 9;
+        let dx = m.x - n.x, dy = m.y - n.y;
+
+        if (dt) {                                         // ① 근거리 반발
+          const R0 = (n.w + n.h + m.w + m.h) * .42;
+          const d = Math.hypot(dx, dy) || 1;
+          if (d < R0) {
+            const f = (R0 - d) * 3.2 * dt / d;
+            n.vx -= dx * f; n.vy -= dy * f;
+            m.vx += dx * f; m.vy += dy * f;
+          }
+        }
+        const ox2 = halfW - Math.abs(dx), oy2 = halfH - Math.abs(dy);
+        if (ox2 <= 0 || oy2 <= 0) continue;               // 안 겹침
+        // 파고든 깊이가 얕은 축으로만 밀어냄 → 격자처럼 자연스럽게 정렬
+        let px = 0, py = 0;
+        if (ox2 < oy2) px = (dx >= 0 ? ox2 : -ox2);
+        else py = (dy >= 0 ? oy2 : -oy2);
+        if (!dx && !dy) { px = (Math.random() - .5) * 4; py = (Math.random() - .5) * 4; }
+        const nFixed = (n === hoverNode || n === dragNode);
+        const mFixed = (m === hoverNode || m === dragNode);
+        if (nFixed && mFixed) continue;
+        const s = strength * (nFixed || mFixed ? 1 : .5);
+        if (!mFixed) { m.x += px * s; m.y += py * s; }
+        if (!nFixed) { n.x -= px * s; n.y -= py * s; }
+        // 위치만 밀어내면 속도가 남아 계속 파고든다 → 접근 속도를 상쇄(비탄성 충돌)
+        if (px !== 0) {
+          const rel = m.vx - n.vx;
+          if (rel * px < 0) {
+            const a = (n.vx + m.vx) * .5;
+            if (!nFixed) n.vx = a;
+            if (!mFixed) m.vx = a;
+          }
+        } else if (py !== 0) {
+          const rel = m.vy - n.vy;
+          if (rel * py < 0) {
+            const a = (n.vy + m.vy) * .5;
+            if (!nFixed) n.vy = a;
+            if (!mFixed) m.vy = a;
+          }
+        }
+      }
+    }
+  }
+}
+let kinetic = 0;     // 직전 프레임의 최고 속도 (분리 패스를 더 돌릴지 판단)
+function simulate(dt, settling) {
+  kinetic = 0;
+  for (const e of edges) {
+    const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
+    const d = Math.hypot(dx, dy) || 1;
+    // 스프링이 세면 분리를 이기고 이미지가 뭉개지므로 최대 가속도를 제한
+    const f = clamp((d - e.rest) * (0.10 + e.sim * 0.32), -42, 42) * dt;
+    const ux = dx / d * f, uy = dy / d * f;
+    e.a.vx += ux; e.a.vy += uy;
+    e.b.vx -= ux; e.b.vy -= uy;
+  }
+  const t = now();
+  const ar = boardAspect();
+  for (const n of nodes) {
+    // 간격은 separate() 가 맡음. 여기서는 아주 약한 구심력 + 화면 비율의 타원 경계만.
+    // 구심력은 반드시 상한을 둔다 — 거리에 비례시키면 보드가 서서히 수축한다.
+    const gr = Math.hypot(n.x, n.y) || 1;
+    const gf = Math.min(gr * 0.05, 9) * dt;
+    n.vx -= n.x / gr * gf;
+    n.vy -= n.y / gr * gf;
+    const ex = n.x / (boardR * ar), ey = n.y / (boardR / ar);
+    const rr = Math.hypot(ex, ey);
+    if (rr > 1) {
+      // 멀리 끌어다 놓은 이미지가 군중을 뚫고 돌아오지 않도록 완만하게
+      const f = Math.min((rr - 1) * 300, 55) * dt;
+      n.vx -= ex / rr * f; n.vy -= ey / rr * f;
+    }
+    if (!settling) {                                          // 둥둥 떠다니는 느낌
+      n.vx += Math.cos(t * n.driftSpeed + n.phase) * 7.5 * dt;
+      n.vy += Math.sin(t * n.driftSpeed * 1.31 + n.phase) * 7.5 * dt;
+    }
+    const damp = Math.pow(0.055, dt);
+    n.vx *= damp; n.vy *= damp;
+    const sp = Math.hypot(n.vx, n.vy), MAX = 420;
+    if (sp > MAX) { n.vx = n.vx / sp * MAX; n.vy = n.vy / sp * MAX; }
+    if (sp > kinetic) kinetic = sp;
+    if (n === hoverNode || n === dragNode) { n.vx = 0; n.vy = 0; continue; } // 호버 시 위치 유지
+    n.x += n.vx * dt; n.y += n.vy * dt;
+  }
+  separate(1, dt);
+  // 빠르게 움직일 때만 한 번 더 — 잔잔할 때는 프레임을 아낀다
+  if (!settling && (dragInfl || kinetic > 110)) separate(.7, 0);
+}
+
+/* =========================================================================
+   4. 렌더링
+   ========================================================================= */
+function roundRect(c, x, y, w, h, r) {
+  if (c.roundRect) { c.beginPath(); c.roundRect(x, y, w, h, r); return; }
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+function starPath(c, cx, cy, r) {
+  c.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r * .46;
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+    i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+  }
+  c.closePath();
+}
+
+let lastT = now();
+function loop() {
+  if (!running) return;
+  requestAnimationFrame(loop);   // 프레임 예약을 먼저 — 그려는 도중 문제가 생겨도 멈추지 않도록
+  const t = now();
+  const dt = clamp((t - lastT) / 1000, 0, 1 / 30);
+  lastT = t;
+
+  updateCam();
+  if (!viewerOpen) simulate(dt);
+
+  // 드래그 전파 세기 (붙잡을 때 빠르게, 놓을 때 천천히 — 둘 다 ease-in-out)
+  if (dragInfl) {
+    inflP = clamp(inflP + inflDir * dt / (inflDir > 0 ? 0.16 : 0.55), 0, 1);
+    if (inflP === 0 && inflDir < 0) dragInfl = null;
+  }
+
+  // 상태 트윈 (ease-in-out)
+  for (const n of nodes) {
+    n.hoverP = clamp(n.hoverP + n.hoverDir * dt / 0.26, 0, 1);
+    n.favP = clamp(n.favP + n.favDir * dt / 0.30, 0, 1);
+    if (n.introP < 1) {
+      const el = t - introStart - n.introDelay;
+      n.introP = clamp(el / 460, 0, 1);
+    }
+  }
+
+  if (viewerOpen) return;          // 전체화면일 땐 보드를 그릴 필요가 없다
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, VW, VH);
+  const g = ctx.createLinearGradient(0, 0, 0, VH);
+  g.addColorStop(0, "#16161A"); g.addColorStop(1, "#101013");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+
+  ctx.save();
+  ctx.translate(cam.x, cam.y); ctx.scale(cam.z, cam.z);
+
+  // --- 연결선 ---
+  // 호버가 풀린 뒤에도 강조가 ease-in-out 으로 되돌아가도록 직전 노드를 유지
+  const focus = hoverNode || (prevHover && prevHover.hoverP > 0 ? prevHover : null);
+  const focusId = focus ? focus.id : -1;
+  const fp = focus ? easeInOut(focus.hoverP) : 0;
+  ctx.lineCap = "round";
+  const dimAll = 1 - 0.72 * fp;
+  const deferred = [];                       // 등장 중이거나 강조되는 선은 따로
+  for (let g = 0; g < edgeGroups.length; g++) {
+    const arr = edgeGroups[g];
+    if (!arr.length) continue;
+    ctx.beginPath();
+    let any = false;
+    for (const e of arr) {
+      const intro = Math.min(e.a.introP, e.b.introP);
+      if (intro <= 0) continue;
+      if (intro < .999 || (focusId >= 0 && (e.a.id === focusId || e.b.id === focusId))) {
+        deferred.push(e); continue;
+      }
+      ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y);
+      any = true;
+    }
+    if (!any) continue;
+    const st = groupStyle[g];
+    ctx.strokeStyle = st.color;
+    ctx.globalAlpha = clamp(st.alpha * dimAll, 0, .85);
+    ctx.lineWidth = st.width;
+    ctx.stroke();
+  }
+  for (const e of deferred) {
+    const intro = Math.min(e.a.introP, e.b.introP);
+    const linked = focusId >= 0 && (e.a.id === focusId || e.b.id === focusId);
+    ctx.strokeStyle = e.a.css;
+    ctx.globalAlpha = clamp((0.16 + e.sim * 0.30) * intro * (linked ? 1 + 1.4 * fp : dimAll), 0, .85);
+    ctx.lineWidth = (0.9 + e.sim * 1.5) * (linked ? 1 + fp : 1);
+    ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // --- 노드 ---
+  // 화면 밖은 그리지 않는다
+  const vx0 = -cam.x / cam.z - NODE_SIZE, vy0 = -cam.y / cam.z - NODE_SIZE;
+  const vx1 = (VW - cam.x) / cam.z + NODE_SIZE, vy1 = (VH - cam.y) / cam.z + NODE_SIZE;
+  // 호버한 이미지는 맨 위에 그리기 위해 마지막에 한 번 더 (매 프레임 정렬하지 않는다)
+  for (let idx = 0; idx <= nodes.length; idx++) {
+    const n = idx < nodes.length ? nodes[idx] : hoverNode;
+    if (!n || (idx < nodes.length && n === hoverNode)) continue;
+    if (n.introP <= 0) continue;
+    if (n.x < vx0 || n.x > vx1 || n.y < vy0 || n.y > vy1) continue;
+    const ip = easeInOut(n.introP);
+    const hs = 1 + HOVER_SCALE * easeInOut(n.hoverP);  // 호버 시 확대
+    const s = hs * (0.72 + 0.28 * ip);
+    const dimAmt = focusId >= 0 && n.id !== focusId && !focus.neighbors.includes(n.id)
+      ? 1 - 0.55 * fp : 1;
+    const w = n.w * s, h = n.h * s;
+    const x = n.x - w / 2, y = n.y - h / 2;
+
+    ctx.globalAlpha = ip * dimAmt;
+    // 화면에서 작게 보일 땐 둥근 모서리/테두리가 보이지 않으므로 간단히 그린다 (수백 장에서 큰 차이)
+    const detailed = w * cam.z > 40;
+
+    if (!detailed) {
+      ctx.drawImage(w * cam.z <= SMALL ? n.small : n.bmp, x, y, w, h);
+      if (n.fav) {
+        ctx.strokeStyle = "rgba(255,111,15,.9)"; ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+      }
+    } else {
+      ctx.save();
+      if (n.hoverP > 0) {
+        ctx.shadowColor = "rgba(0,0,0,.55)";
+        ctx.shadowBlur = 30 * easeInOut(n.hoverP);
+        ctx.shadowOffsetY = 8 * easeInOut(n.hoverP);
+      }
+      roundRect(ctx, x, y, w, h, 7);
+      ctx.fillStyle = "#1B1B1F"; ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      roundRect(ctx, x, y, w, h, 7);
+      ctx.clip();
+      ctx.drawImage(n.bmp, x, y, w, h);
+      ctx.restore();
+
+      // 테두리
+      roundRect(ctx, x + .5, y + .5, w - 1, h - 1, 7);
+      if (n.fav) { ctx.strokeStyle = "rgba(255,111,15,.9)"; ctx.lineWidth = 2; }
+      else if (n.hoverP > 0) { ctx.strokeStyle = `rgba(255,255,255,${.1 + .35 * easeInOut(n.hoverP)})`; ctx.lineWidth = 1.4; }
+      else { ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.lineWidth = 1; }
+      ctx.stroke();
+    }
+
+    // 즐겨찾기 배지 (우상단)
+    if (n.favP > 0) {
+      const fp = easeInOut(n.favP);
+      const r = 11 * fp;
+      const bx = x + w - 9, by = y + 9;
+      ctx.save();
+      ctx.globalAlpha = ip * fp * dimAmt;
+      ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#FF6F0F"; ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      starPath(ctx, bx, by, r * .58);
+      ctx.fillStyle = "#fff"; ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+let introStart = now();
+
+/* =========================================================================
+   5. 인터랙션 — 호버 / 드래그 / 팬 / 줌 / 클릭
+   ========================================================================= */
+let hoverNode = null, prevHover = null, dragNode = null, panning = false;
+let downPos = null, moved = 0, dragOff = { x: 0, y: 0 };
+
+function hitTest(sx, sy) {
+  const p = toWorld(sx, sy);
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    const s = (1 + HOVER_SCALE * easeInOut(n.hoverP)) * (0.72 + 0.28 * easeInOut(n.introP));
+    const w = n.w * s / 2, h = n.h * s / 2;
+    if (p.x >= n.x - w && p.x <= n.x + w && p.y >= n.y - h && p.y <= n.y + h) return n;
+  }
+  return null;
+}
+function setHover(n) {
+  if (hoverNode === n) return;
+  if (hoverNode) { hoverNode.hoverDir = -1; prevHover = hoverNode; }
+  hoverNode = n;
+  if (n) { n.hoverDir = 1; n.vx = 0; n.vy = 0; }
+  canvas.classList.toggle("pointing", !!n && !panning);
+}
+
+canvas.addEventListener("mousemove", (e) => {
+  if (dragNode) {
+    const p = toWorld(e.clientX, e.clientY);
+    const nx = p.x - dragOff.x, ny = p.y - dragOff.y;
+    const dx = nx - dragNode.x, dy = ny - dragNode.y;
+    dragNode.x = nx; dragNode.y = ny;
+    dragNode.vx = 0; dragNode.vy = 0;
+
+    // 연결된 이미지 → 그 이미지에 연결된 이미지… 순으로 끌려온다
+    if (dragInfl) {
+      const k = easeInOut(inflP);
+      for (const [id, w] of dragInfl) {
+        const m = nodeById.get(id);
+        if (!m || m === dragNode) continue;
+        const s = w * k;
+        m.x += dx * s; m.y += dy * s;
+      }
+      const t = now(), el = Math.max(t - dragT, 1);
+      dragT = t;
+      dragVel.x = dragVel.x * .62 + (dx / el * 1000) * .38;   // 놓았을 때의 여운용
+      dragVel.y = dragVel.y * .62 + (dy / el * 1000) * .38;
+    }
+    moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+    return;
+  }
+  if (panning) {
+    cam.tw = null;
+    cam.x += e.movementX; cam.y += e.movementY;
+    moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+    return;
+  }
+  setHover(hitTest(e.clientX, e.clientY));
+});
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  downPos = { x: e.clientX, y: e.clientY }; moved = 0;
+  const n = hitTest(e.clientX, e.clientY);
+  if (n) {
+    dragNode = n;
+    const p = toWorld(e.clientX, e.clientY);
+    dragOff = { x: p.x - n.x, y: p.y - n.y };
+    setHover(n);
+    buildDragInfluence(n);
+  } else {
+    panning = true;
+    canvas.classList.add("grabbing");
+  }
+});
+window.addEventListener("mouseup", (e) => {
+  if (dragNode && moved < 5) openViewer(dragNode.index);
+  if (dragNode) releaseDragInfluence();
+  dragNode = null; panning = false;
+  canvas.classList.remove("grabbing");
+  downPos = null;
+});
+canvas.addEventListener("mouseleave", () => setHover(null));
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const cur = cam.tw ? cam.tw.tz : cam.z;
+  const z = clamp(cur * Math.pow(1.0016, -e.deltaY), 0.08, 3.2);
+  const wx = (e.clientX - (cam.tw ? cam.tw.tx : cam.x)) / cur;
+  const wy = (e.clientY - (cam.tw ? cam.tw.ty : cam.y)) / cur;
+  camTweenTo(e.clientX - wx * z, e.clientY - wy * z, z, 240);   // ease-in-out 줌
+}, { passive: false });
+
+$("fitBtn").addEventListener("click", () => fitView(700));
+$("backBtn").addEventListener("click", () => {
+  running = false;
+  nodes.forEach(n => {
+    if (n.bmp.close) n.bmp.close();
+    if (n.small !== n.bmp && n.small.close) n.small.close();
+  });
+  nodes = []; edges = []; favorites = [];
+  nodeById.clear(); dragInfl = null; inflP = 0; inflDir = -1;
+  renderFavbar();
+  $("hud").classList.remove("show");
+  setupEl.classList.remove("hide");
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+/* =========================================================================
+   6. 전체화면 뷰어
+   ========================================================================= */
+const viewerEl = $("viewer");
+let viewerOpen = false, viewerIdx = -1;
+
+/* --- 휠 확대/축소 (확대 상태에선 드래그로 이동) --- */
+let vz = 1, vtx = 0, vty = 0, vDrag = null, vMoved = 0;
+
+/** 이미지 요소를 그림 크기에 딱 맞춘다 → 확대 기준점·클릭 판정이 정확해짐 */
+function fitViewerImg() {
+  const img = $("viewerImg");
+  if (!img.naturalWidth || !img.naturalHeight) return;
+  const availW = window.innerWidth - 96, availH = window.innerHeight - 190;
+  const k = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
+  img.style.width = Math.round(img.naturalWidth * k) + "px";
+  img.style.height = Math.round(img.naturalHeight * k) + "px";
+}
+function applyViewerTransform(dur) {
+  const img = $("viewerImg");
+  img.style.transitionDuration = dur + "ms";
+  img.style.transform = `translate(${vtx.toFixed(1)}px, ${vty.toFixed(1)}px) scale(${vz.toFixed(3)})`;
+  viewerEl.classList.toggle("zoomed", vz > 1.001);
+  const z = $("viewerZoom");
+  z.textContent = Math.round(vz * 100) + "%";
+  z.classList.toggle("show", vz > 1.001);
+}
+function resetViewerZoom() { vz = 1; vtx = 0; vty = 0; }
+/** 이미지가 화면 밖으로 완전히 빠지지 않도록 */
+function clampViewerPan() {
+  const img = $("viewerImg");
+  const w = img.offsetWidth * vz, h = img.offsetHeight * vz;
+  const mx = Math.max(0, (w - window.innerWidth) / 2) + 80;
+  const my = Math.max(0, (h - window.innerHeight) / 2) + 80;
+  vtx = clamp(vtx, -mx, mx);
+  vty = clamp(vty, -my, my);
+}
+
+$("viewerImg").addEventListener("load", fitViewerImg);
+window.addEventListener("resize", fitViewerImg);
+
+viewerEl.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const img = $("viewerImg");
+  const nz = clamp(vz * Math.pow(1.0022, -e.deltaY), 1, 8);
+  if (Math.abs(nz - vz) < 1e-4) return;
+  vz = nz;                            // 휠은 배율만 — 위치 이동은 드래그로만
+  if (vz <= 1.001) { vz = 1; vtx = 0; vty = 0; }
+  clampViewerPan();
+  applyViewerTransform(190);          // ease-in-out
+}, { passive: false });
+
+viewerEl.addEventListener("mousedown", (e) => {
+  if (e.button !== 0 || e.target.closest("button")) return;
+  vMoved = 0;
+  if (vz > 1.001) {
+    e.preventDefault();              // 브라우저 기본 이미지 끌기 차단 (안 하면 드래그가 끊긴다)
+    vDrag = { x: e.clientX, y: e.clientY, tx: vtx, ty: vty };
+    viewerEl.classList.add("panning");
+  }
+});
+viewerEl.addEventListener("dragstart", (e) => e.preventDefault());
+window.addEventListener("mousemove", (e) => {
+  if (!vDrag) return;
+  vMoved += Math.abs(e.movementX) + Math.abs(e.movementY);
+  vtx = vDrag.tx + (e.clientX - vDrag.x);
+  vty = vDrag.ty + (e.clientY - vDrag.y);
+  clampViewerPan();
+  applyViewerTransform(0);
+});
+window.addEventListener("mouseup", () => {
+  vDrag = null;
+  viewerEl.classList.remove("panning");
+});
+
+function openViewer(idx) {
+  if (idx < 0 || idx >= nodes.length) return;
+  viewerIdx = idx;
+  const n = nodes[idx];
+  resetViewerZoom();
+  const img = $("viewerImg");
+  img.style.width = img.style.height = "";
+  img.style.transitionDuration = "0ms";
+  img.style.transform = "scale(.92)";
+  requestAnimationFrame(() => applyViewerTransform(420));   // 등장도 ease-in-out
+  $("viewerImg").src = api("/file?p=" + encodeURIComponent(n.path));
+  $("viewerName").textContent = n.path;
+  $("viewerIndex").textContent = `${idx + 1} / ${nodes.length}`;
+  syncFavBtn();
+  viewerOpen = true;
+  viewerEl.classList.add("show");
+}
+function closeViewer() {
+  viewerOpen = false;
+  viewerEl.classList.remove("show");
+  resetViewerZoom();
+  applyViewerTransform(220);     // 확대 상태였어도 부드럽게 되돌리며 닫힘
+  lastT = now();
+}
+function syncFavBtn() {
+  const n = nodes[viewerIdx];
+  const on = !!(n && n.fav);
+  $("favBtn").classList.toggle("fav-on", on);
+  $("favBtnText").textContent = on ? "즐겨찾기에서 빼기" : "즐겨찾기에 추가";
+  $("favBtn").querySelector("svg").setAttribute("fill", on ? "currentColor" : "none");
+}
+$("favBtn").addEventListener("click", () => { toggleFav(nodes[viewerIdx]); syncFavBtn(); });
+$("closeBtn").addEventListener("click", closeViewer);
+// 버튼이 아닌 허공(배경·이미지 바깥·상하단 빈 공간)을 누르면 보드로 돌아간다.
+// 이미지 요소는 그림 크기에 맞춰져 있으므로 target 비교만으로 정확히 판정된다.
+viewerEl.addEventListener("click", (e) => {
+  if (e.target.closest("button")) return;
+  if (vMoved > 4) { vMoved = 0; return; }        // 확대 상태에서 끌어 옮긴 경우
+  if (e.target === $("viewerImg")) return;
+  closeViewer();
+});
+$("navPrev").addEventListener("click", () => openViewer((viewerIdx - 1 + nodes.length) % nodes.length));
+$("navNext").addEventListener("click", () => openViewer((viewerIdx + 1) % nodes.length));
+window.addEventListener("keydown", (e) => {
+  if (!viewerOpen) {
+    if (e.key === "0" && running) fitView(700);
+    return;
+  }
+  if (e.key === "Escape") closeViewer();
+  else if (e.key === "ArrowLeft") openViewer((viewerIdx - 1 + nodes.length) % nodes.length);
+  else if (e.key === "ArrowRight") openViewer((viewerIdx + 1) % nodes.length);
+  else if (e.key === "f" || e.key === "F" || e.key === " ") {
+    e.preventDefault(); toggleFav(nodes[viewerIdx]); syncFavBtn();
+  }
+});
+
+/* =========================================================================
+   7. 즐겨찾기 리스트 (하단, 좌우 슬라이드)
+   ========================================================================= */
+let favorites = [];      // node 참조 배열 (추가 순서)
+let favVisible = false;
+const favlist = $("favlist");
+
+function toggleFav(n) {
+  if (!n) return;
+  n.fav = !n.fav;
+  n.favDir = n.fav ? 1 : -1;
+  if (n.fav) favorites.push(n);
+  else favorites = favorites.filter(f => f !== n);
+  renderFavbar();
+}
+
+function renderFavbar() {
+  const cnt = favorites.length;
+  $("favCount").textContent = cnt;
+  $("exportCount").textContent = cnt;
+  $("exportBtn").disabled = cnt === 0;
+  const show = cnt > 0;
+  if (show !== favVisible) {
+    favVisible = show;
+    $("favbar").classList.toggle("show", show);
+    $("exportBtn").classList.toggle("lifted", show);
+  }
+  favlist.innerHTML = "";
+  if (!cnt) {
+    const d = document.createElement("div");
+    d.className = "fav-empty";
+    d.textContent = "이미지를 클릭해 전체화면에서 즐겨찾기에 추가해 보세요";
+    favlist.appendChild(d);
+    updateSlideBtns();
+    return;
+  }
+  for (const n of favorites) {
+    const item = document.createElement("div");
+    item.className = "fav-item enter";
+    item.title = n.path;
+    const c = document.createElement("canvas");
+    const k = 84 / Math.max(n.bmp.height, 1);
+    c.width = Math.max(1, Math.round(n.bmp.width * k) * 2);
+    c.height = 168;
+    c.style.width = Math.round(n.bmp.width * k) + "px";
+    c.getContext("2d").drawImage(n.bmp, 0, 0, c.width, c.height);
+    item.appendChild(c);
+
+    const rm = document.createElement("button");
+    rm.className = "rm";
+    rm.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    rm.addEventListener("click", (e) => { e.stopPropagation(); toggleFav(n); });
+    item.appendChild(rm);
+
+    item.addEventListener("click", () => openViewer(n.index));
+    favlist.appendChild(item);
+    requestAnimationFrame(() => requestAnimationFrame(() => item.classList.remove("enter")));
+  }
+  updateSlideBtns();
+}
+
+function updateSlideBtns() {
+  const scrollable = favlist.scrollWidth - favlist.clientWidth > 8;
+  $("slideL").classList.toggle("show", scrollable && favlist.scrollLeft > 4);
+  $("slideR").classList.toggle("show", scrollable && favlist.scrollLeft < favlist.scrollWidth - favlist.clientWidth - 4);
+}
+favlist.addEventListener("scroll", updateSlideBtns);
+window.addEventListener("resize", updateSlideBtns);
+$("slideL").addEventListener("click", () => animateScroll(favlist, favlist.scrollLeft - favlist.clientWidth * .8));
+$("slideR").addEventListener("click", () => animateScroll(favlist, favlist.scrollLeft + favlist.clientWidth * .8));
+favlist.addEventListener("wheel", (e) => {
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    e.preventDefault();
+    animateScroll(favlist, favlist.scrollLeft + e.deltaY * 1.4, 320);
+  }
+}, { passive: false });
+
+// 드래그로 리스트 밀기
+let favDrag = null;
+favlist.addEventListener("mousedown", (e) => {
+  favDrag = { x: e.clientX, left: favlist.scrollLeft, moved: 0 };
+});
+window.addEventListener("mousemove", (e) => {
+  if (!favDrag) return;
+  favDrag.moved += Math.abs(e.movementX);
+  if (favDrag.moved > 4) {
+    cancelAnimationFrame(favlist._scrollRaf || 0);
+    favlist.scrollLeft = favDrag.left - (e.clientX - favDrag.x);
+  }
+});
+window.addEventListener("mouseup", () => {
+  if (favDrag && favDrag.moved > 4) {
+    const stop = (ev) => { ev.stopPropagation(); window.removeEventListener("click", stop, true); };
+    window.addEventListener("click", stop, true);   // 드래그 후 클릭 방지
+  }
+  favDrag = null;
+});
+
+/* =========================================================================
+   8. 내보내기
+   ========================================================================= */
+$("exportBtn").addEventListener("click", async () => {
+  if (!favorites.length) return;
+  const btn = $("exportBtn");
+  btn.disabled = true;
+  try {
+    const r = await fetch(api("/api/export"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: favorites.map(n => n.path) })
+    }).then(r => r.json());
+    if (!r.ok) toast(r.error || "내보내기에 실패했습니다.");
+    else if (r.failed && r.failed.length)
+      toast(`${r.copied}장을 Selected 폴더에 복사했습니다 (실패 ${r.failed.length}장)`, 4200);
+    else
+      toast(`${r.copied}장을 ${r.dest} 에 복사했습니다`, 4200);
+  } catch (e) {
+    toast("서버와 통신할 수 없습니다.");
+  }
+  btn.disabled = favorites.length === 0;
+});
+
+renderFavbar();
+</script>
