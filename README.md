@@ -8,6 +8,8 @@
 > picks into a `Selected` folder. Python standard library only — no pip install, no cloud, no
 > telemetry. The server binds to 127.0.0.1 and every request is token-checked.
 
+**다운로드** — [v1.0.0 실행 파일](https://github.com/97hhg1114-del/image-selector/releases/latest) (11MB, 파이썬 설치 불필요)
+
 ![보드 화면](docs/board.png)
 
 ## 어떤 상황에서 쓰나
