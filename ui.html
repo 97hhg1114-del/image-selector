@@ -1209,7 +1209,7 @@ function loop() {
       ctx.save();
       roundRect(ctx, x, y, w, h, 7);
       ctx.clip();
-      ctx.drawImage(n.bmp, x, y, w, h);
+      ctx.drawImage(n.hoverP > 0 && n.hi ? n.hi : n.bmp, x, y, w, h);
       ctx.restore();
 
       // 테두리
@@ -1261,8 +1261,49 @@ function setHover(n) {
   if (hoverNode === n) return;
   if (hoverNode) { hoverNode.hoverDir = -1; prevHover = hoverNode; }
   hoverNode = n;
-  if (n) { n.hoverDir = 1; n.vx = 0; n.vy = 0; }
+  if (n) { n.hoverDir = 1; n.vx = 0; n.vy = 0; requestHi(n); }
   canvas.classList.toggle("pointing", !!n && !panning);
+}
+
+/* --- 호버 고화질 — 180px 썸네일을 키우면 흐려지므로, 올린 이미지만 표시 크기에 맞춰 원본에서 다시 디코딩 --- */
+const HI_KEEP = 12;            // 고화질 비트맵을 들고 있을 최대 장수 (메모리 상한)
+const hiCache = [];
+function hiNeed() {
+  const z = cam.tw ? cam.tw.tz : cam.z;
+  const px = NODE_SIZE * (1 + HOVER_SCALE) * z * DPR;
+  return Math.pow(2, Math.ceil(Math.log2(Math.max(px, 256))));   // 256·512·1024 단계 — 줌할 때마다 다시 읽지 않도록
+}
+function requestHi(n) {
+  setTimeout(() => { if (hoverNode === n) loadHi(n); }, 90);    // 훑고 지나가는 이미지는 건너뜀
+}
+async function loadHi(n) {
+  const need = hiNeed();
+  if (n.hiLoading || (n.hi && n.hiSize >= need)) return;
+  n.hiLoading = true;
+  try {
+    const blob = await fetch(api("/file?p=" + encodeURIComponent(n.path))).then(r => { if (!r.ok) throw new Error("fail"); return r.blob(); });
+    let bmp = await createImageBitmap(blob);
+    const long = Math.max(bmp.width, bmp.height);
+    if (long > need) {
+      const opt = bmp.width >= bmp.height ? { resizeWidth: need } : { resizeHeight: need };
+      try {
+        const fit = await createImageBitmap(bmp, { ...opt, resizeQuality: "high" });
+        bmp.close(); bmp = fit;
+      } catch (e) { bmp.close(); return; }           // 축소를 못 하면 거대한 원본을 들고 있지 않는다
+    }
+    if (nodeById.get(n.id) !== n) { bmp.close(); return; }   // 그새 보드를 닫았다
+    if (n.hi) n.hi.close();
+    n.hi = bmp;
+    n.hiSize = long <= need ? Infinity : need;     // 원본이 더 작으면 더 키워 읽을 필요가 없다
+    const i = hiCache.indexOf(n);
+    if (i >= 0) hiCache.splice(i, 1);
+    hiCache.push(n);
+    while (hiCache.length > HI_KEEP) {
+      const old = hiCache.shift();
+      if (old.hi) { old.hi.close(); old.hi = null; }
+    }
+  } catch (e) { /* 실패하면 썸네일 그대로 */ }
+  finally { n.hiLoading = false; }
 }
 
 canvas.addEventListener("mousemove", (e) => {
@@ -1329,6 +1370,7 @@ canvas.addEventListener("wheel", (e) => {
   const wx = (e.clientX - (cam.tw ? cam.tw.tx : cam.x)) / cur;
   const wy = (e.clientY - (cam.tw ? cam.tw.ty : cam.y)) / cur;
   camTweenTo(e.clientX - wx * z, e.clientY - wy * z, z, 240);   // ease-in-out 줌
+  if (hoverNode) requestHi(hoverNode);                          // 더 키웠으면 그 크기로 다시 읽음
 }, { passive: false });
 
 $("fitBtn").addEventListener("click", () => fitView(700));
@@ -1337,7 +1379,9 @@ $("backBtn").addEventListener("click", () => {
   nodes.forEach(n => {
     if (n.bmp.close) n.bmp.close();
     if (n.small !== n.bmp && n.small.close) n.small.close();
+    if (n.hi) n.hi.close();
   });
+  hiCache.length = 0;
   nodes = []; edges = []; favorites = [];
   nodeById.clear(); dragInfl = null; inflP = 0; inflDir = -1;
   renderFavbar();
